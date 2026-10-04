@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Data & artifacts
+docs/
+qdrant_storage/
+*.npy
+*.pkl
+
+# Secrets / env
+.env
