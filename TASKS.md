@@ -46,49 +46,57 @@ You have `run.py`. Finish it properly before moving on.
 
 ---
 
-## Phase 2 — The ugly end-to-end loop  `[ ]`
+## Phase 2 — The ugly end-to-end loop  `[x]`
 
 Goal: **any** cited answer, working fully offline. Quality comes later. Keep it
 crude on purpose — no Qdrant, no Docling yet.
 
-- [ ] **2.1 Get documents.** Download 1–2 Fedlex laws as PDF (start small: e.g.
+- [x] **2.1 Get documents.** Download 1–2 Fedlex laws as PDF (start small: e.g.
   OR / ZGB excerpt) into a `docs/` folder. Public documents only.
-- [ ] **2.2 Naive load + chunk.** Extract text and split it into crude
+- [x] **2.2 Naive load + chunk.** Extract text and split it into crude
   fixed-size chunks (e.g. ~500 chars, small overlap). Plain text extraction is
   fine here — you'll replace it in Phase 3.
   - Acceptance: a Python list of chunk strings, each with a label you can cite
     (e.g. filename + chunk index).
-- [ ] **2.3 In-memory retrieval.** Embed all chunks once (reuse Phase 1). Write
+- [x] **2.3 In-memory retrieval.** Embed all chunks once (reuse Phase 1). Write
   `retrieve(query, k)` → returns the top-k chunks + labels by cosine. No DB yet;
   a numpy array in memory is the store.
   - Acceptance: asking a question whose answer is in the docs returns the right
     passage in the top 3.
-- [ ] **2.4 Talk to the local LLM.** `ollama pull` a model that fits 8 GB
+- [~] **2.4 Talk to the local LLM.** `ollama pull` a model that fits 8 GB
   (e.g. a 7–8B quant). Call it from Python with a hand-built prompt that pastes
   the retrieved chunks as context and asks the question.
   - Acceptance: `python run.py "<eine Frage>"` prints a German answer grounded in
     the pasted chunks, and it runs with Wi-Fi off.
   - **Checkpoint:** which parts of this loop touch the network at runtime? Prove
     it to yourself (airplane mode).
+  - Open (2026-10-10): German grounded answer works via qwen3:8b, but the query
+    is hardcoded in `rag.py` (no CLI arg) and the Wi-Fi-off run hasn't been done.
 
 > This is the "it works" milestone. Commit it to git before improving anything.
 
 ---
 
-## Phase 3 — Make retrieval good  `[ ]`
+## Phase 3 — Make retrieval good  `[~]`
 
 Now replace the crude parts with the real stack, one lever at a time, and
 *measure* each change against a couple of fixed test questions.
 
-- [ ] **3.1 Structure-aware chunking (Docling).** Swap fixed-size splitting for
+- [x] **3.1 Structure-aware chunking (Docling).** Swap fixed-size splitting for
   Docling + a structure-aware chunker so articles/headings stay intact and you
   get a heading path to use as the citation label.
   - Acceptance: chunks no longer cut mid-article; the label shows the article/
     heading, not just a number.
-- [ ] **3.2 Vector DB (Qdrant).** Stand up Qdrant in Docker; move your vectors
+  - Done via Docling first, then replaced by Fedlex Akoma Ntoso XML (one chunk
+    per article, label `DSG Art. 5 (Begriffe)`), because the PDF layout lost
+    lit. structure. Open: chunk granularity (article vs. paragraph vs. lit).
+- [~] **3.2 Vector DB (Qdrant).** Stand up Qdrant in Docker; move your vectors
   out of the numpy array into a Qdrant collection. Split the code into an
   `ingest` step (parse → chunk → embed → upsert) and a `query` step.
   - Acceptance: you can re-run queries without re-embedding the corpus each time.
+  - Open (2026-10-10): retrieval runs against Qdrant, but every run still
+    re-embeds and recreates the collection — no ingest/query split yet.
+    `recreate_collection` is deprecated → `collection_exists` + `create_collection`.
 - [ ] **3.3 Two-stage retrieve → rerank.** Retrieve top-k (e.g. 20) from Qdrant,
   then rerank with `bge-reranker-v2-m3` and keep the best n (e.g. 5).
   - Acceptance: on your test questions, the passage you *know* is correct moves
@@ -100,21 +108,25 @@ Now replace the crude parts with the real stack, one lever at a time, and
 
 ---
 
-## Phase 4 — Grounding, citations, refusal  `[ ]`
+## Phase 4 — Grounding, citations, refusal  `[~]`
 
 The behaviour you actually sell to a regulated buyer.
 
-- [ ] **4.1 Grounded prompt + citation mapping.** Build the context so each
+- [~] **4.1 Grounded prompt + citation mapping.** Build the context so each
   passage carries a number `[1]…[n]`, and instruct the model (in German) to
   answer only from the passages and cite the number behind each claim. Return
   the answer plus the source list the numbers map to.
   - Acceptance: answers carry `[n]` markers and you can click from a marker to
     the exact passage it used.
-- [ ] **4.2 Refusal / abstention.** Make it answer exactly one fixed German
+  - Open (2026-10-10): numbered context + German citing prompt work (`[1]` →
+    Art. 1). Only the answer is printed; no source list is returned alongside it.
+- [~] **4.2 Refusal / abstention.** Make it answer exactly one fixed German
   sentence ("… nicht in den vorliegenden Dokumenten.") when the passages don't
   contain the answer. Lower temperature to reduce invention.
   - Acceptance: the off-topic question from 1.3 now triggers the refusal instead
     of a confident guess.
+  - Open (2026-10-10): fixed sentence + temperature 0.1 are in the prompt; the
+    off-topic test hasn't been run against the XML/Qdrant pipeline.
   - **Checkpoint:** what's the difference between a *correct* citation and a
     *faithful* one? (research map §4). Can you produce an example where the
     answer is right but the citation doesn't actually support it?
